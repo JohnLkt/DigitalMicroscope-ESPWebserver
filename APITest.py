@@ -1,8 +1,11 @@
 import requests
 
-url = 'http://esp.local/led'
+# url = 'http://esp.local/led'
+url = 'http://esp.local/pos'
 data = {
-    "brightness": "50"
+    "xpos": "50",
+    "ypos": "50",
+    "zpos": "50",
 }
 
 response = requests.post(url, json=data)
