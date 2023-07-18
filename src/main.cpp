@@ -3,20 +3,32 @@
 #include <ESPmDNS.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include <AccelStepper.h>
 
 // Digital Microscope WiFi Network Credentials
 const char* ssid = "Digimic";
 const char* password = "digimicIEEE";
 
+// PINS
+
+const int XDIR_PIN = 12;
+const int XSTEP_PIN = 13;
+
+const int YDIR_PIN = 27;
+const int YSTEP_PIN = 14;
+
+const int ZDIR_PIN = 25;
+const int ZSTEP_PIN = 26;
+
 AsyncWebServer server(80);
+
+#define motorInterfaceType 1
+AccelStepper XAxis(1, XSTEP_PIN, XDIR_PIN);
+AccelStepper YAxis(1, YSTEP_PIN, YDIR_PIN);
+AccelStepper ZAxis(1, ZSTEP_PIN, ZDIR_PIN);
 
 // Global States
 int LEDBrightness = 0;
-
-// absolute values
-int XPos = 0;
-int YPos = 0;
-int ZPos = 0;
 
 // new values
 int newXPos = 0;
@@ -27,13 +39,29 @@ int newZPos = 0;
 void setup() {
   Serial.begin(115200);
 
+  // Motor Setup  
+  XAxis.setMaxSpeed(3000);
+  XAxis.setAcceleration(100);
+  XAxis.setSpeed(200);
+
+  YAxis.setMaxSpeed(3000);
+  YAxis.setAcceleration(100);
+  YAxis.setSpeed(200);
+
+  ZAxis.setMaxSpeed(3000);
+  ZAxis.setAcceleration(100);
+  ZAxis.setSpeed(200);
+
+  // define hardware pins
+  pinMode(BUILTIN_LED, OUTPUT);
+
   Serial.println("Setting up AP");
   WiFi.softAP(ssid, password);
   Serial.println("WiFi setup done");
 
   if(!MDNS.begin("esp")) {
-     Serial.println("Error starting mDNS");
-     return;
+    Serial.println("Error starting mDNS");
+    return;
   }
   
   Serial.println(WiFi.localIP());
@@ -45,91 +73,51 @@ void setup() {
   server.onRequestBody([](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
   int start = millis();
   Serial.println("Running");
-    if (request->url() == "/led") {
-      DynamicJsonDocument doc(1024);
-      Serial.print("1");
-      Serial.println(millis() - start);
-      deserializeJson(doc, data);
-      Serial.print("2");
-      Serial.println(millis() - start);
-      LEDBrightness = doc["brightness"];
-      Serial.print("3");
-      Serial.println(millis() - start);
-      analogWrite(BUILTIN_LED, LEDBrightness);
-      Serial.print("4");
-      Serial.println(millis() - start);
-      request->send(200, "text/plain", "end");
-      Serial.print("end");
-      Serial.println(millis() - start);
-    }
-  });
-
-  server.onRequestBody([](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
-  int start = millis();
-  Serial.println("Running");
     if (request->url() == "/pos") {
       DynamicJsonDocument doc(1024);
-      Serial.print("1");
-      Serial.println(millis() - start);
+
+      // Serial.println(millis() - start);
       deserializeJson(doc, data);
-      Serial.print("2");
-      Serial.println(millis() - start);
+      // Serial.println(millis() - start);
       // get new values
       newXPos = doc["xpos"];
       newYPos = doc["ypos"];
       newZPos = doc["zpos"];
 
-      int moveX;
-      int moveY;
-      int moveZ;
+      LEDBrightness = doc["brightness"];
       
-      Serial.print("3");
-      Serial.println(millis() - start);
-      // calculate servo difference
-      if (XPos < newXPos) {
-        moveX = newXPos - XPos;
-      } else if (XPos > newXPos) {
-        moveX = XPos - newXPos;
-      } else {
-        Serial.println("X axis unchanged / data error");
-      }
 
-      if (YPos < newYPos) {
-        moveY = newYPos - YPos;
-      } else if (YPos > newYPos) {
-        moveY = YPos - newYPos;
-      } else {
-        Serial.println("Y axis unchanged / data error");
-      }
+      Serial.printf("Moving X Axis to step: %d", newXPos);
+      XAxis.moveTo(newXPos);
 
-      if (ZPos < newZPos) {
-        moveZ = newZPos - ZPos;
-      } else if (ZPos > newZPos) {
-        moveZ = ZPos - newZPos;
-      } else {
-        Serial.println("Z axis unchanged / data error");
-      }
+      Serial.printf("Moving Y Axis to step: %d", newYPos);
+      YAxis.moveTo(newYPos);
 
-      // send difference to servo
-      Serial.println(moveX);
-      Serial.println(moveY);
-      Serial.println(moveZ);
+      Serial.printf("Moving Z Axis to step: %d", newZPos);
+      ZAxis.moveTo(newZPos);
 
-      Serial.print("4");
-      Serial.println(millis() - start);
-      request->send(200, "text/plain", "end");
-      Serial.print("end");
+      // Serial.println(millis() - start);
+      request->send(200, "text/plain", "End Pos");
+      Serial.println("End Pos");
       Serial.println(millis() - start);
     } 
   });
 
-  // define ports
-  pinMode(BUILTIN_LED, OUTPUT);
-  
   server.begin();
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
 
+  analogWrite(BUILTIN_LED, LEDBrightness);
+
+  if (XAxis.distanceToGo() != 0) {
+    XAxis.run();
+  }
+  if (YAxis.distanceToGo() != 0) {
+    YAxis.run();
+  }
+  if (ZAxis.distanceToGo() != 0) {
+    ZAxis.run();
+  }
+  
 }
